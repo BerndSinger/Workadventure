@@ -13,7 +13,7 @@ export enum GameRoomPolicyTypes {
 
 export class PusherRoom {
     private readonly positionNotifier: PositionDispatcher;
-    public readonly anonymous: boolean;
+    public readonly public: boolean;
     public tags: string[];
     public policyType: GameRoomPolicyTypes;
     public readonly roomSlug: string;
@@ -23,11 +23,11 @@ export class PusherRoom {
     constructor(public readonly roomId: string,
                 private socketListener: ZoneEventListener)
     {
-        this.anonymous = isRoomAnonymous(roomId);
+        this.public = isRoomAnonymous(roomId);
         this.tags = [];
         this.policyType = GameRoomPolicyTypes.ANONYMUS_POLICY;
 
-        if (this.anonymous) {
+        if (this.public) {
             this.roomSlug = extractRoomSlugPublicRoomId(this.roomId);
         } else {
             const {organizationSlug, worldSlug, roomSlug} = extractDataFromPrivateRoomId(this.roomId);

@@ -1,4 +1,4 @@
-import {PusherRoom} from "../Model/PusherRoom";
+import {GameRoomPolicyTypes, PusherRoom} from "../Model/PusherRoom";
 import {CharacterLayer, ExSocketInterface} from "../Model/Websocket/ExSocketInterface";
 import {
     GroupDeleteMessage,
@@ -54,7 +54,7 @@ export interface AdminSocketData {
 
 export class SocketManager implements ZoneEventListener {
     
-    private Worlds: Map<string, PusherRoom> = new Map<string, PusherRoom>();
+    private rooms: Map<string, PusherRoom> = new Map<string, PusherRoom>();
     private sockets: Map<number, ExSocketInterface> = new Map<number, ExSocketInterface>();
 
     constructor() {
@@ -219,7 +219,7 @@ export class SocketManager implements ZoneEventListener {
         try {
             client.viewport = viewport;
 
-            const world = this.Worlds.get(client.roomId);
+            const world = this.rooms.get(client.roomId);
             if (!world) {
                 console.error("In SET_VIEWPORT, could not find world with id '", client.roomId, "'");
                 return;
@@ -310,12 +310,12 @@ export class SocketManager implements ZoneEventListener {
             if (socket.roomId) {
                 try {
                     //user leaves room
-                    const room: PusherRoom | undefined = this.Worlds.get(socket.roomId);
+                    const room: PusherRoom | undefined = this.rooms.get(socket.roomId);
                     if (room) {
                         debug('Leaving room %s.', socket.roomId);
                         room.leave(socket);
                         if (room.isEmpty()) {
-                            this.Worlds.delete(socket.roomId);
+                            this.rooms.delete(socket.roomId);
                             debug('Room %s is empty. Deleting.', socket.roomId);
                         }
                     } else {
@@ -339,17 +339,21 @@ export class SocketManager implements ZoneEventListener {
 
     async getOrCreateRoom(roomId: string): Promise<PusherRoom> {
         //check and create new world for a room
-        let world = this.Worlds.get(roomId)
+        let world = this.rooms.get(roomId)
         if(world === undefined){
             world = new PusherRoom(roomId, this);
-            if (!world.anonymous) {
-                const data = await adminApi.fetchMapDetails(world.organizationSlug, world.worldSlug, world.roomSlug)
-                world.tags = data.tags
-                world.policyType = Number(data.policy_type)
+            if (!world.public) {
+                await this.getAdminData(world);
             }
-            this.Worlds.set(roomId, world);
+            this.rooms.set(roomId, world);
         }
         return Promise.resolve(world)
+    }
+
+    public async getAdminData(world: PusherRoom): Promise<void> {
+        const data = await adminApi.fetchMapDetails(world.organizationSlug, world.worldSlug, world.roomSlug)
+        world.tags = data.tags;
+        world.policyType = Number(data.policy_type);
     }
 
     emitPlayGlobalMessage(client: ExSocketInterface, playglobalmessage: PlayGlobalMessage) {
@@ -360,7 +364,7 @@ export class SocketManager implements ZoneEventListener {
     }
 
     public getWorlds(): Map<string, PusherRoom> {
-        return this.Worlds;
+        return this.rooms;
     }
     
     searchClientByUuid(uuid: string): ExSocketInterface | null {
